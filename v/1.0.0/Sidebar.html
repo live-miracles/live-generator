@@ -31,12 +31,17 @@
     <div id="yt-container">
       <div class="logs h-24 overflow-y-scroll"></div>
 
-      <div>
+      <div class="not-signed hidden">
+        <p>Please authorize your YouTube account.</p>
+        <button onclick="signInYouTube()" class="action">Sign In</button>
+      </div>
+
+      <div class="signed hidden">
         <p>
-          User: <b><span class="user-email">...</span></b>
+          Hello <b><span class="user-email">...</span></b>
         </p>
         <p>
-          Channel: <b><span class="channel">...</span></b>
+          <b><span class="channel">...</span></b> Channel <button onclick="signOutYouTube()">Sign Out</button>
         </p>
         <hr />
         <button onclick="scheduleYouTubeBroadcasts()" class="action">Schedule Selected Rows</button>
@@ -48,7 +53,22 @@
     </div>
 
     <script>
+      const authUrlYt = '<?= authUrlYouTube ?>';
       const ytElem = document.getElementById('yt-container');
+      const signedInYtDiv = ytElem.querySelector('.signed');
+      const notSignedInYtDiv = ytElem.querySelector('.not-signed');
+
+      function signInYouTube() {
+        window.open(authUrlYt);
+      }
+
+      function signOutYouTube() {
+        google.script.run
+          .withSuccessHandler(() => {
+            updateYtUI();
+          })
+          .signOut();
+      }
 
       function updateStreamKeys() {
         showResponse('Updating YouTube stream keys...');
@@ -68,20 +88,34 @@
 
       function updateYtUI() {
         showResponse('Loading...');
+        signedInYtDiv.classList.add('hidden');
+        notSignedInYtDiv.classList.add('hidden');
 
         google.script.run
-          .withSuccessHandler((email) => {
-            ytElem.querySelector('.user-email').textContent = email;
+          .withSuccessHandler((hasAccess) => {
+            if (hasAccess) {
+              google.script.run
+                .withSuccessHandler((email) => {
+                  ytElem.querySelector('.user-email').textContent = email;
+                })
+                .withFailureHandler((e) => showError(e))
+                .getUserEmail();
+              google.script.run
+                .withSuccessHandler((channel) => {
+                  ytElem.querySelector('.channel').textContent = channel.title;
+                  google.script.run.withFailureHandler((e) => showError(e)).addChannel(channel.id, channel.title);
+                })
+                .withFailureHandler((e) => showError(e))
+                .getMyChannel();
+              signedInYtDiv.classList.remove('hidden');
+              notSignedInYtDiv.classList.add('hidden');
+            } else {
+              signedInYtDiv.classList.add('hidden');
+              notSignedInYtDiv.classList.remove('hidden');
+            }
           })
           .withFailureHandler((e) => showError(e))
-          .getUserEmail();
-        google.script.run
-          .withSuccessHandler((channel) => {
-            ytElem.querySelector('.channel').textContent = channel.title;
-            google.script.run.withFailureHandler((e) => showError(e)).addChannel(channel.id, channel.title);
-          })
-          .withFailureHandler((e) => showError(e))
-          .getMyChannel();
+          .hasAccess();
       }
 
       function showResponse(value, isError = false, time = Date.now()) {

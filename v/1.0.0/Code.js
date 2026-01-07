@@ -1,16 +1,26 @@
 const props = PropertiesService.getScriptProperties();
 
+const CLIENT_ID = props.getProperty('CLIENT_ID');
+const CLIENT_SECRET = props.getProperty('CLIENT_SECRET');
 const SPREADSHEET_ID = props.getProperty('SPREADSHEET_ID');
 const KEY_SHEET_NAME = 'YT Keys';
+const CHANNEL_SHEET_NAME = 'YT Channels';
 const SCHEDULE_SHEET_NAME = 'YT Schedule';
 
 // ===== Sidebar =====
 function onOpen(e) {
-    SpreadsheetApp.getUi().createAddonMenu().addItem('Show Sidebar', 'showSidebar').addToUi();
+    SpreadsheetApp.getUi()
+        .createAddonMenu()
+        .addItem('Show Sidebar', 'showSidebar')
+        .addItem('getMyChannel', 'getMyChannel')
+        .addToUi();
 }
 
 function showSidebar() {
+    const service = getYouTubeService_();
     const template = HtmlService.createTemplateFromFile('Sidebar');
+    template.authUrlYouTube = service.getAuthorizationUrl();
+
     const page = template.evaluate().setTitle('Live Generator');
     SpreadsheetApp.getUi().showSidebar(page);
 }
@@ -88,6 +98,23 @@ function getSelectedRows() {
     return data;
 }
 
+function addChannel(id, title) {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(CHANNEL_SHEET_NAME);
+    if (!sheet) {
+        throw new Error(`The "${CHANNEL_SHEET_NAME}" sheet does not exist.`);
+    }
+    const data = sheet.getDataRange().getValues();
+    const isDuplicate = data.some((row) => row[0] === id && row[1] === title);
+    if (isDuplicate) {
+        return `Row with id ${id} and title ${title} already exists.`;
+    }
+    const nextRow = sheet.getLastRow() + 1;
+    sheet.getRange(nextRow, 1).setValue(id);
+    sheet.getRange(nextRow, 2).setValue(title);
+    return `Added a new Channel with id ${id} and title ${title}.`;
+}
+
 // ===== Validations & Formating =====
 function isNonNegativeInteger(str) {
     return /^\d+$/.test(str);
@@ -129,15 +156,18 @@ function formatBroadcastData(data) {
             throw getValidationError(row.row, 'Minute value shold be between 0 and 59');
         } else if (row.Visibility === '') {
             throw getValidationError(row.row, 'Visibility is not defined');
+        } else if (row['Channel ID'] === '') {
+            throw getValidationError(row.row, 'Channel ID is not defined');
         } else if (row['Key ID'] === '') {
             throw getValidationError(row.row, 'Key ID is not defined');
+        } else if (row['Channel ID'] !== row['Key Channel ID']) {
+            throw getValidationError(
+                row.row,
+                'Selected Key does not belong to the selected Channel',
+            );
         } else if (row['Broadcast ID'] !== '') {
             throw getValidationError(row.row, 'Broadcast ID is already set');
         }
-
-        // else if (!['TRUE', 'FALSE'].includes(row['Auto Start'])) {
-        //     throw getValidationError(row.row, 'Broadcast ID is already set');
-        // }
 
         row.Year = pad(row.Year === '' ? now.getFullYear() : row.Year, 4);
         row.Month = pad(row.Month === '' ? now.getMonth() + 1 : row.Month);

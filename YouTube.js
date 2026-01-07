@@ -1,131 +1,14 @@
-// ===== Auth API =====
-function getYouTubeService_() {
-    // Create a new service with the given name. The name will be used when
-    // persisting the authorized token, so ensure it is unique within the
-    // scope of the property store.
-    return (
-        OAuth2.createService('youtube')
-
-            // Set the endpoint URLs, which are the same for all Google services.
-            .setAuthorizationBaseUrl('https://accounts.google.com/o/oauth2/auth')
-            .setTokenUrl('https://accounts.google.com/o/oauth2/token')
-
-            // Set the client ID and secret, from the Google Developers Console.
-            .setClientId(CLIENT_ID)
-            .setClientSecret(CLIENT_SECRET)
-
-            // Set the name of the callback function in the script referenced
-            // above that should be invoked to complete the OAuth flow.
-            .setCallbackFunction('authCallback')
-
-            // Set the property store where authorized tokens should be persisted.
-            .setPropertyStore(PropertiesService.getUserProperties())
-
-            // Set the scopes to request (space-separated for Google services).
-            .setScope([
-                'https://www.googleapis.com/auth/youtube',
-                'https://www.googleapis.com/auth/youtube.force-ssl',
-                'https://www.googleapis.com/auth/youtube.readonly',
-                'https://www.googleapis.com/auth/youtubepartner',
-                'https://www.googleapis.com/auth/youtubepartner-channel-audit',
-            ])
-    );
-}
-
-function authCallback(request) {
-    const service = getYouTubeService_();
-    const isAuthorized = service.handleCallback(request);
-    if (isAuthorized) {
-        showSidebar();
-        return HtmlService.createHtmlOutput('Success! You can close this tab.');
-    } else {
-        return HtmlService.createHtmlOutput('Denied. You can close this tab.');
-    }
-}
-
-function hasAccess() {
-    return getYouTubeService_().hasAccess();
-}
-
-function getToken_() {
-    if (!hasAccess()) {
-        showSidebar();
-        throw new Error('Please Sign In, your token has expired.');
-    }
-    return getYouTubeService_().getAccessToken();
-}
-
-function signOut() {
-    getYouTubeService_().reset();
-}
-
-// ===== YouTube API =====
-const BASEURL = 'https://www.googleapis.com/youtube/v3/';
-
-function buildUrl(url, params) {
-    var params = params || {}; //allow for NULL options
-    var paramString = Object.keys(params)
-        .map(function (key) {
-            return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
-        })
-        .join('&');
-    return url + (url.indexOf('?') >= 0 ? '&' : '?') + paramString;
-}
-
-function fetchUrl(path, token, options = {}) {
-    const fetchOptions = {
-        method: '',
-        muteHttpExceptions: true,
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + token },
-    };
-    const url = BASEURL + path;
-
-    for (option in options) {
-        fetchOptions[option] = options[option];
-    }
-
-    const response = UrlFetchApp.fetch(url, fetchOptions);
-    if (response.getResponseCode() != 200) {
-        throw new Error(response.getContentText());
-    } else {
-        return JSON.parse(response.getContentText());
-    }
-}
-
-function fetchPage(path, token, options, returnParamPath) {
-    var fetchOptions = {
-        method: '',
-        muteHttpExceptions: true,
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + token },
-    };
-    for (option in options) {
-        fetchOptions[option] = options[option];
-    }
-
-    const ret = [];
-    let nextPageToken;
-    let url = BASEURL + path;
-    do {
-        const response = UrlFetchApp.fetch(url, fetchOptions);
-
-        if (response.getResponseCode() != 200) {
-            throw new Error(response.getContentText());
-        } else {
-            const data = JSON.parse(response.getContentText());
-            console.log(data.items.map((item) => item.snippet.title).join('; '));
-            nextPageToken = data.nextPageToken;
-            ret.push(...data[returnParamPath]);
-        }
-        url = buildUrl(BASEURL + path, { pageToken: nextPageToken });
-    } while (nextPageToken);
-    return ret;
-}
-
+/**
+ * Create (insert) a YouTube Live Broadcast
+ *
+ * @param {Object} data
+ * @return {Object} YouTube LiveBroadcast resource
+ */
 function insertBroadcast(data) {
-    const start = `${data.Year}-${data.Month}-${data.Day}T${data.Hour}:${data.Minute}:00+0530`;
-    const payload = {
+    // Build RFC3339 timestamp with IST offset (+05:30)
+    const start = `${data.Year}-${data.Month}-${data.Day}` + `T${data.Hour}:${data.Minute}:00+0530`;
+
+    const resource = {
         snippet: {
             title: data.Title,
             description: '',
@@ -133,24 +16,31 @@ function insertBroadcast(data) {
             scheduledEndTime: start,
         },
         status: {
-            privacyStatus: data.Visibility,
+            privacyStatus: data.Visibility, // public | unlisted | private
         },
         contentDetails: {
-            enableDvr: data.DVR,
+            enableDvr: data['DVR'],
             enableAutoStart: data['Auto Start'],
             enableAutoStop: data['Auto Stop'],
-            latencyPreference: data['Latency'],
+            latencyPreference: data['Latency'], // normal | low | ultraLow
         },
     };
-    const path = buildUrl('liveBroadcasts', { part: 'snippet,contentDetails,status' });
-    const callOptions = { method: 'POST', payload: JSON.stringify(payload) };
-    const response = fetchUrl(path, getToken_(), callOptions);
-    console.log(response);
-    return response;
+
+    const res = YouTube.LiveBroadcasts.insert('snippet,contentDetails,status', resource);
+
+    console.log(res);
+    return res;
 }
 
+/**
+ * Create (insert) a new YouTube Live Stream
+ *
+ * @param {Object} data
+ * @param {string} data.Title - Stream title
+ * @return {Object} YouTube LiveStream resource
+ */
 function insertStream(data) {
-    const payload = {
+    const resource = {
         snippet: {
             title: data.Title,
         },
@@ -160,52 +50,58 @@ function insertStream(data) {
             resolution: '1080p',
         },
     };
-    const path = buildUrl('liveStreams', { part: 'snippet,cdn' });
-    const callOptions = { method: 'POST', payload: JSON.stringify(payload) };
-    const response = fetchUrl(path, getToken_(), callOptions);
-    console.log(response);
-    return response;
+
+    const res = YouTube.LiveStreams.insert('snippet,cdn', resource);
+
+    console.log(res);
+    return res;
 }
 
-// Bind the broadcast to the video stream. By doing so, you link the video that
-// you will transmit to YouTube to the broadcast that the video is for.
+/**
+ * Bind a live broadcast to a live stream (stream key)
+ *
+ * @param {string} broadcastId - LiveBroadcast ID
+ * @param {string} streamId - LiveStream ID (NOT the stream key)
+ */
 function bindBroadcast(broadcastId, streamId) {
-    const path = buildUrl('liveBroadcasts/bind', {
-        part: 'id,contentDetails',
-        id: broadcastId,
+    const response = YouTube.LiveBroadcasts.bind(broadcastId, 'id,contentDetails', {
         streamId: streamId,
     });
-    const callOptions = { method: 'POST' };
-    const response = fetchUrl(path, getToken_(), callOptions);
+
     console.log(response);
     return response;
 }
 
-function getStreams() {
-    const path = buildUrl('liveStreams', { part: 'snippet,cdn', mine: 'true' });
-    const callOptions = { method: 'GET' };
-    const response = fetchPage(path, getToken_(), callOptions, 'items');
-    const streams = response.map((item) => ({
+function getStreamKeys() {
+    const res = YouTube.LiveStreams.list('id,snippet,cdn,status', { mine: true, maxResults: 50 });
+
+    if (!res.items || res.items.length === 0) {
+        Logger.log('No live streams found');
+        return;
+    }
+
+    const streams = res.items.map((item) => ({
         id: item.id,
         title: item.snippet.title,
         key: item.cdn.ingestionInfo.streamName,
         channelId: item.snippet.channelId,
     }));
+
     console.log('getStreams()', streams);
-    console.log('getStreams()', JSON.stringify(response[0], null, 2));
     return streams;
 }
 
 function getMyChannel() {
-    const path = buildUrl('channels', { part: 'snippet,contentDetails', mine: 'true' });
-    const callOptions = { method: 'GET' };
-    const response = fetchUrl(path, getToken_(), callOptions);
-    console.log('getMyChannel()', JSON.stringify(response, null, 2));
-    const channelsNum = response.pageInfo.totalResults;
-    if (channelsNum !== 1 || response.items.length !== 1) {
-        throw new Error(`getMyChannel() returned ${channelsNum} channels instead of 1.`);
+    const response = YouTube.Channels.list('id,snippet,statistics,contentDetails', { mine: true });
+
+    if (!response.items || response.items.length === 0) {
+        Logger.log('No channel found');
+        return;
     }
+
     const channel = response.items[0];
+
+    console.log(channel);
     return {
         id: channel.id,
         title: channel.snippet.title,
