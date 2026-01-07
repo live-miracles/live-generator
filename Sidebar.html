@@ -78,7 +78,6 @@
         google.script.run
           .withSuccessHandler((channel) => {
             ytElem.querySelector('.channel').textContent = channel.title;
-            google.script.run.withFailureHandler((e) => showError(e)).addChannel(channel.id, channel.title);
           })
           .withFailureHandler((e) => showError(e))
           .getMyChannel();

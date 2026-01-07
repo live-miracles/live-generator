@@ -50,7 +50,9 @@ function scheduleBroadcasts() {
 function updateStreamKeys() {
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(KEY_SHEET_NAME);
-    const data = getStreams().map((item) => [item.id, item.channelId, item.title, item.key]);
+    const data = getStreamKeys()
+        .sort((a, b) => a.title.localeCompare(b.title))
+        .map((item) => [item.id, item.channelId, item.title, item.key]);
 
     const currentRows = sheet.getLastRow();
     if (currentRows > 2) {
