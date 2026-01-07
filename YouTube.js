@@ -26,7 +26,7 @@ function insertBroadcast(data) {
         },
     };
 
-    const res = YouTube.LiveBroadcasts.insert('snippet,contentDetails,status', resource);
+    const res = YouTube.LiveBroadcasts.insert(resource, 'snippet,contentDetails,status');
 
     console.log(res);
     return res;
