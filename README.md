@@ -11,3 +11,6 @@ a few rows with the stream config parameters it will automatically schedule thes
 3. Go to **Extensions** -> **Apps Script** and copy-paste the `Code.js`, `YouTube.js`, and `Sidebar.html` files.
 4. Go back to Google Sheet and go to **Extensions** -> **Live Generator**. Once you select it a sidebar will show.
 5. Click the "Update Stream Keys" button to fetch all the streaming keys from YouTube.
+
+<img width="1851" height="809" alt="Screenshot 2026-01-08 191505" src="https://github.com/user-attachments/assets/af74d874-18ef-46a0-ba01-bddd425425e6" />
+
