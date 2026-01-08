@@ -22,29 +22,34 @@
       .overflow-y-scroll {
         overflow-y: scroll;
       }
-      .h-24 {
-        max-height: 6rem;
+      .h-56 {
+        max-height: 14rem;
       }
     </style>
   </head>
   <body class="m-3">
     <div id="yt-container">
-      <div class="logs h-24 overflow-y-scroll"></div>
-
       <div>
         <p>
-          User: <b><span class="user-email">...</span></b>
+          User:<b> <span class="user-email">...</span></b>
         </p>
         <p>
-          Channel: <b><span class="channel">...</span></b>
+          Channel:<b> <span class="channel">...</span></b>
         </p>
+        <p><b>Note:</b> You can only login in your personal YouTube Channel. The script won't work with branded channels to which you have access.</p>
         <hr />
         <button onclick="scheduleYouTubeBroadcasts()" class="action">Schedule Selected Rows</button>
         <p>If you leave year, month, day, or hour empty it will use the current date.</p>
         <br />
+        <hr />
         <button onclick="updateStreamKeys()" class="action">Update Stream Keys</button>
+        <p>If you update your stream keys use this button.</p>
         <br />
+        <hr />
       </div>
+
+      <p><b>Logs</b></p>
+      <div class="logs h-56 overflow-y-scroll"></div>
     </div>
 
     <script>
@@ -66,23 +71,6 @@
           .scheduleBroadcasts();
       }
 
-      function updateYtUI() {
-        showResponse('Loading...');
-
-        google.script.run
-          .withSuccessHandler((email) => {
-            ytElem.querySelector('.user-email').textContent = email;
-          })
-          .withFailureHandler((e) => showError(e))
-          .getUserEmail();
-        google.script.run
-          .withSuccessHandler((channel) => {
-            ytElem.querySelector('.channel').textContent = channel.title;
-          })
-          .withFailureHandler((e) => showError(e))
-          .getMyChannel();
-      }
-
       function showResponse(value, isError = false, time = Date.now()) {
         const logs = document.querySelector('.logs');
         const timestamp = new Date(time).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
@@ -102,7 +90,19 @@
         return new Option(String(str)).innerHTML;
       }
 
-      updateYtUI();
+      google.script.run
+        .withSuccessHandler((email) => {
+          ytElem.querySelector('.user-email').textContent = email;
+        })
+        .withFailureHandler((e) => showError(e))
+        .getUserEmail();
+
+      google.script.run
+        .withSuccessHandler((channel) => {
+          ytElem.querySelector('.channel').textContent = channel.title;
+        })
+        .withFailureHandler((e) => showError(e))
+        .getMyChannel();
     </script>
   </body>
 </html>

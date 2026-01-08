@@ -1,6 +1,5 @@
 const props = PropertiesService.getScriptProperties();
 
-const SPREADSHEET_ID = props.getProperty('SPREADSHEET_ID');
 const KEY_SHEET_NAME = 'YT Keys';
 const SCHEDULE_SHEET_NAME = 'YT Schedule';
 
@@ -26,9 +25,19 @@ function getColumnIndex(sheet, columnName) {
 }
 
 function scheduleBroadcasts() {
+    const ss = SpreadsheetApp.getActive();
+    const activeSheet = ss.getActiveSheet();
+    const activeName = activeSheet.getName();
+    const sheet = ss.getSheetByName(SCHEDULE_SHEET_NAME);
+    if (!sheet) {
+        throw new Error(`Sheet ${SCHEDULE_SHEET_NAME} not found`);
+    }
+    if (activeName !== SCHEDULE_SHEET_NAME) {
+        sheet.activate();
+    }
+
     const rows = getSelectedRows();
 
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SCHEDULE_SHEET_NAME);
     const broadcastIdColumn = getColumnIndex(sheet, 'Broadcast ID');
     for (let row of rows) {
         try {
@@ -48,8 +57,13 @@ function scheduleBroadcasts() {
 }
 
 function updateStreamKeys() {
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(KEY_SHEET_NAME);
+    const ss = SpreadsheetApp.getActive();
+    const sheet = ss.getSheetByName(KEY_SHEET_NAME);
+    if (!sheet) {
+        throw new Error(`Sheet "${KEY_SHEET_NAME}" not found`);
+    }
+    sheet.activate();
+
     const data = getStreamKeys()
         .sort((a, b) => a.title.localeCompare(b.title))
         .map((item) => [item.id, item.channelId, item.title, item.key]);
@@ -90,7 +104,7 @@ function getSelectedRows() {
     return data;
 }
 
-// ===== Validations & Formating =====
+// ===== Validations & Formatting =====
 function isNonNegativeInteger(str) {
     return /^\d+$/.test(str);
 }
@@ -117,37 +131,40 @@ function formatBroadcastData(data) {
     const now = new Date(Date.now() + 2 * (60 * 60 * 1000));
 
     for (let row of data) {
+        row.Year = pad(row.Year === '' ? now.getFullYear() : row.Year, 4);
+        row.Month = pad(row.Month === '' ? now.getMonth() + 1 : row.Month);
+        row.Day = pad(row.Day === '' ? now.getDate() : row.Day);
+        row.Hour = pad(row.Hour === '' ? now.getHours() : row.Hour);
+        row.Minute = pad(row.Minute === '' ? 0 : row.Minute);
+
         if (row.Title === '') {
             throw getValidationError(row.row, "Title can't be empty");
         } else if (!validateNumber(row.Year, 2000, 2100)) {
-            throw getValidationError(row.row, 'Year value shold be between 2000 and 2100');
+            throw getValidationError(row.row, 'Year value should be between 2000 and 2100');
         } else if (!validateNumber(row.Month, 1, 12)) {
-            throw getValidationError(row.row, 'Month value shold be between 1 and 12');
+            throw getValidationError(row.row, 'Month value should be between 1 and 12');
         } else if (!validateNumber(row.Day, 1, 31)) {
-            throw getValidationError(row.row, 'Day value shold be between 1 and 31');
+            throw getValidationError(row.row, 'Day value should be between 1 and 31');
         } else if (!validateNumber(row.Hour, 0, 23)) {
-            throw getValidationError(row.row, 'Hour value shold be between 0 and 23');
+            throw getValidationError(row.row, 'Hour value should be between 0 and 23');
         } else if (!validateNumber(row.Minute, 0, 59)) {
-            throw getValidationError(row.row, 'Minute value shold be between 0 and 59');
+            throw getValidationError(row.row, 'Minute value should be between 0 and 59');
         } else if (row.Visibility === '') {
             throw getValidationError(row.row, 'Visibility is not defined');
         } else if (row['Key ID'] === '') {
             throw getValidationError(row.row, 'Key ID is not defined');
         } else if (row['Broadcast ID'] !== '') {
             throw getValidationError(row.row, 'Broadcast ID is already set');
+        } else if (!['true', 'false', ''].includes(row.DVR)) {
+            throw getValidationError(row.row, 'DVR should be a true/false value');
+        } else if (!['true', 'false', ''].includes(row['Auto Start'])) {
+            throw getValidationError(row.row, 'Auto Start should be a true/false value');
+        } else if (!['true', 'false', ''].includes(row['Auto Stop'])) {
+            throw getValidationError(row.row, 'Auto Stop should be a true/false value');
         }
 
-        // else if (!['TRUE', 'FALSE'].includes(row['Auto Start'])) {
-        //     throw getValidationError(row.row, 'Broadcast ID is already set');
-        // }
-
-        row.Year = pad(row.Year === '' ? now.getFullYear() : row.Year, 4);
-        row.Month = pad(row.Month === '' ? now.getMonth() + 1 : row.Month);
-        row.Day = pad(row.Day === '' ? now.getDate() : row.Day);
-        row.Hour = pad(row.Hour === '' ? now.getHours() : row.Hour);
-        row.Minute = pad(row.Minute === '' ? 0 : row.Minute);
-        row.DVR = JSON.parse(row.DVR);
-        row['Auto Start'] = JSON.parse(row['Auto Start']);
-        row['Auto Stop'] = JSON.parse(row['Auto Stop']);
+        row.DVR = row.DVR === '' ? false : JSON.parse(row.DVR);
+        row['Auto Start'] = row['Auto Start'] === '' ? false : JSON.parse(row['Auto Start']);
+        row['Auto Stop'] = row['Auto Stop'] === 0 ? false : JSON.parse(row['Auto Stop']);
     }
 }
